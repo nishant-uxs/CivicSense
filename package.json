@@ -2,12 +2,14 @@
   "name": "civicsense",
   "version": "1.0.0",
   "description": "Blockchain-backed civic issue reporting platform",
-  "main": "index.js",
+  "main": "server/server.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
-    "install-all": "npm install && cd server && npm install && cd ../client && npm install && cd ../smart-contract && npm install"
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install && cd ../smart-contract && npm install",
+    "build": "cd server && npm install",
+    "start": "node server/server.js"
   },
   "keywords": ["blockchain", "civic", "governance"],
   "author": "",
