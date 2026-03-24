@@ -75,9 +75,12 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-gray-600">Track and manage civic issues in your community</p>
+      <div className="mb-8 flex items-center space-x-4">
+        <img src="/assets/logo.svg" alt="CivicSense" className="w-14 h-14 object-contain" />
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-gray-600">Track and manage civic issues in your community</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -104,7 +107,7 @@ const Dashboard = () => {
         <div className="flex flex-col space-y-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-semibold text-gray-900">Recent Issues</h2>
-            
+
             <div className="mt-4 sm:mt-0 flex space-x-3">
               <select
                 value={filter}

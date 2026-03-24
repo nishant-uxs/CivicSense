@@ -1,52 +1,67 @@
-const Complaint = require('../models/Complaint');
+const supabase = require('../utils/supabase');
 const { verifyComplaintIntegrity, checkComplaintExistsOnChain, generateHash } = require('../utils/blockchain');
+const { formatComplaintResponse } = require('./complaintController');
 
 exports.verifyComplaintIntegrity = async (req, res) => {
   try {
-    const complaint = await Complaint.findById(req.params.id)
-      .populate('reporter', 'name email');
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    if (!complaint.onChain) {
+    // Fetch reporter
+    const { data: reporter } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', complaint.reporter_id)
+      .single();
+
+    if (!complaint.on_chain) {
       return res.status(200).json({
         success: true,
         verified: false,
         onChain: false,
         message: 'Complaint not registered on blockchain',
-        complaint
+        complaint: formatComplaintResponse(complaint, reporter)
       });
     }
 
     const complaintDataForHash = {
-      id: complaint._id.toString(),
+      id: complaint.id,
       title: complaint.title,
       description: complaint.description,
       category: complaint.category,
-      location: complaint.location,
-      reporter: complaint.reporter._id.toString(),
-      timestamp: complaint.createdAt
+      location: {
+        type: 'Point',
+        coordinates: [complaint.location_lng, complaint.location_lat],
+        address: complaint.location_address
+      },
+      reporter: complaint.reporter_id,
+      timestamp: complaint.created_at
     };
 
     const currentHash = generateHash(complaintDataForHash);
-    const hashMatch = currentHash === complaint.blockchainHash;
+    const hashMatch = currentHash === complaint.blockchain_hash;
 
     let blockchainVerified = false;
     try {
       blockchainVerified = await verifyComplaintIntegrity(
-        complaint._id.toString(),
+        complaint.id,
         complaintDataForHash
       );
-    } catch (error) {
-      console.error('Blockchain verification error:', error);
+    } catch (err) {
+      console.error('Blockchain verification error:', err);
     }
 
-    const existsOnChain = await checkComplaintExistsOnChain(complaint._id.toString());
+    const existsOnChain = await checkComplaintExistsOnChain(complaint.id);
 
     const isTampered = !hashMatch || !blockchainVerified;
 
@@ -54,17 +69,17 @@ exports.verifyComplaintIntegrity = async (req, res) => {
       success: true,
       verified: !isTampered,
       onChain: existsOnChain,
-      hashMatch: hashMatch,
-      blockchainVerified: blockchainVerified,
-      transactionId: complaint.transactionId,
-      blockNumber: complaint.blockNumber,
-      blockchainHash: complaint.blockchainHash,
-      currentHash: currentHash,
-      message: isTampered 
-        ? '⚠️ WARNING: Data has been tampered with! Hash mismatch detected.' 
+      hashMatch,
+      blockchainVerified,
+      transactionId: complaint.transaction_id,
+      blockNumber: complaint.block_number,
+      blockchainHash: complaint.blockchain_hash,
+      currentHash,
+      message: isTampered
+        ? '⚠️ WARNING: Data has been tampered with! Hash mismatch detected.'
         : '✅ Complaint data is verified and has not been tampered with.',
       cannotBeDeleted: existsOnChain,
-      complaint
+      complaint: formatComplaintResponse(complaint, reporter)
     });
   } catch (error) {
     res.status(500).json({
@@ -77,44 +92,60 @@ exports.verifyComplaintIntegrity = async (req, res) => {
 
 exports.getBlockchainProof = async (req, res) => {
   try {
-    const complaint = await Complaint.findById(req.params.id)
-      .populate('reporter', 'name email')
-      .populate('verifiedBy', 'name email');
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    if (!complaint.onChain) {
+    if (!complaint.on_chain) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not registered on blockchain'
       });
     }
 
+    // Fetch reporter and verifiedBy
+    const { data: reporter } = await supabase.from('users').select('id, name, email').eq('id', complaint.reporter_id).single();
+
+    // Fetch status history
+    const { data: statusHistory } = await supabase
+      .from('status_history')
+      .select('*')
+      .eq('complaint_id', complaint.id)
+      .order('timestamp', { ascending: true });
+
     const proof = {
-      complaintId: complaint._id,
+      complaintId: complaint.id,
       title: complaint.title,
       category: complaint.category,
       status: complaint.status,
-      reporter: complaint.reporter.name,
-      createdAt: complaint.createdAt,
+      reporter: reporter ? reporter.name : 'Unknown',
+      createdAt: complaint.created_at,
       blockchain: {
-        onChain: complaint.onChain,
-        hash: complaint.blockchainHash,
-        transactionId: complaint.transactionId,
-        blockNumber: complaint.blockNumber,
-        explorerUrl: `https://mumbai.polygonscan.com/tx/${complaint.transactionId}`
+        onChain: complaint.on_chain,
+        hash: complaint.blockchain_hash,
+        transactionId: complaint.transaction_id,
+        blockNumber: complaint.block_number,
+        explorerUrl: `https://mumbai.polygonscan.com/tx/${complaint.transaction_id}`
       },
-      statusHistory: complaint.statusHistory,
-      resolution: complaint.resolutionHash ? {
-        hash: complaint.resolutionHash,
-        transactionId: complaint.resolutionTransactionId,
-        resolvedAt: complaint.resolvedAt,
-        explorerUrl: `https://mumbai.polygonscan.com/tx/${complaint.resolutionTransactionId}`
+      statusHistory: (statusHistory || []).map(s => ({
+        status: s.status,
+        timestamp: s.timestamp,
+        updatedBy: s.updated_by
+      })),
+      resolution: complaint.resolution_hash ? {
+        hash: complaint.resolution_hash,
+        transactionId: complaint.resolution_transaction_id,
+        resolvedAt: complaint.resolved_at,
+        explorerUrl: `https://mumbai.polygonscan.com/tx/${complaint.resolution_transaction_id}`
       } : null
     };
 

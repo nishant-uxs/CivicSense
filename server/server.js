@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -17,6 +16,7 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const verificationRoutes = require('./routes/verification');
 const { seedOrganizationsIfEmpty } = require('./utils/seedOrganizations');
 const orgRoutes = require('./routes/org');
+const { initSchema } = require('./utils/initSchema');
 
 const app = express();
 
@@ -91,38 +91,25 @@ app.get('/api/health', (req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
+  res.status(500).json({
+    success: false,
     message: 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
-
-async function connectDB() {
-  try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/civicsense';
-    await mongoose.connect(mongoUri);
-    console.log('✅ MongoDB connected');
-  } catch (err) {
-    console.error('⚠️ MongoDB connection failed - Running in demo mode');
-    console.error(err.message);
-    console.error('⚠️ Database features will be disabled');
-    console.error('💡 Install MongoDB: https://www.mongodb.com/try/download/community');
-    // Don't exit - continue without MongoDB for testing
-  }
-}
 
 async function startServer() {
   console.log('\n========================================');
   console.log('  🏛️  CivicSense Server Starting...');
   console.log('========================================\n');
 
-  // Step 1: Connect to MongoDB
-  await connectDB();
+  // Step 1: Initialize Supabase schema
+  await initSchema();
 
+  // Step 2: Seed default organizations
   await seedOrganizationsIfEmpty();
 
-  // Step 2: Start Express server
+  // Step 3: Start Express server
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log('========================================');

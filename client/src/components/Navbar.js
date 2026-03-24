@@ -22,10 +22,8 @@ const Navbar = () => {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">CS</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">CivicSense</span>
+              <img src="/assets/logo.svg" alt="CivicSense" className="w-12 h-12 object-contain" />
+              <span className="text-xl font-bold text-gray-900 dark:text-white">CivicSense</span>
             </Link>
           </div>
 
@@ -46,19 +44,19 @@ const Navbar = () => {
             <button onClick={toggleTheme} className="p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title={isDark ? 'Light mode' : 'Dark mode'}>
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            
+
             {isAuthenticated ? (
               <>
                 <Link to="/dashboard" className="flex items-center space-x-1 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition">
                   <Home size={18} />
                   <span>Dashboard</span>
                 </Link>
-                
+
                 <Link to="/report" className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition">
                   <FileText size={18} />
                   <span>Report Issue</span>
                 </Link>
-                
+
                 {isAdmin && (
                   <Link to="/admin" className="flex items-center space-x-1 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition">
                     <Shield size={18} />
@@ -72,12 +70,12 @@ const Navbar = () => {
                     <span>Org Portal</span>
                   </Link>
                 )}
-                
+
                 <Link to="/profile" className="flex items-center space-x-1 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition">
                   <User size={18} />
                   <span>{user?.name}</span>
                 </Link>
-                
+
                 <button
                   onClick={handleLogout}
                   className="flex items-center space-x-1 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition"
@@ -133,7 +131,7 @@ const Navbar = () => {
             >
               Leaderboard
             </Link>
-            
+
             {isAuthenticated ? (
               <>
                 <Link

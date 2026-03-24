@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { analyzeComplaint, generateSummary, textSimilarity, chatWithGemini, analyzeImageWithGemini } = require('../utils/aiEngine');
-const Complaint = require('../models/Complaint');
+const supabase = require('../utils/supabase');
+const { formatComplaintResponse } = require('../controllers/complaintController');
 
 // POST /api/ai/analyze — analyze complaint text for category + severity (Gemini-powered)
 router.post('/analyze', async (req, res) => {
@@ -26,28 +27,65 @@ router.post('/duplicates', async (req, res) => {
     }
 
     const fullText = `${title || ''} ${description || ''}`;
-    let query = {};
 
-    if (coordinates && coordinates.length === 2) {
-      query['location'] = {
-        $near: {
-          $geometry: { type: 'Point', coordinates },
-          $maxDistance: 2000
-        }
-      };
+    // Fetch recent unresolved complaints
+    let query = supabase
+      .from('complaints')
+      .select('id, title, description, category, location_lng, location_lat, location_address, status, created_at, images')
+      .neq('status', 'Resolved')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    const { data: candidates, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message });
     }
 
-    query['status'] = { $ne: 'Resolved' };
-    const candidates = await Complaint.find(query)
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .select('title description category location status createdAt images');
+    let filteredCandidates = candidates || [];
 
-    const similar = candidates
+    // Filter by location proximity if coordinates provided
+    if (coordinates && coordinates.length === 2) {
+      const [lng, lat] = coordinates;
+      const maxDist = 2000; // 2km
+
+      function haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      filteredCandidates = filteredCandidates.filter(c => {
+        if (!c.location_lat || !c.location_lng) return false;
+        return haversineDistance(lat, lng, c.location_lat, c.location_lng) <= maxDist;
+      });
+    }
+
+    const similar = filteredCandidates
       .map(c => {
         const candidateText = `${c.title} ${c.description}`;
         const similarity = textSimilarity(fullText, candidateText);
-        return { complaint: c, similarity: Math.round(similarity * 100) };
+        // Format complaint for response
+        const complaint = {
+          _id: c.id,
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          category: c.category,
+          location: {
+            type: 'Point',
+            coordinates: [c.location_lng, c.location_lat],
+            address: c.location_address
+          },
+          status: c.status,
+          createdAt: c.created_at,
+          images: c.images || []
+        };
+        return { complaint, similarity: Math.round(similarity * 100) };
       })
       .filter(s => s.similarity >= 25)
       .sort((a, b) => b.similarity - a.similarity)

@@ -1,47 +1,69 @@
-const Complaint = require('../models/Complaint');
+const supabase = require('../utils/supabase');
 const exifParser = require('exif-parser');
 const fs = require('fs');
 const haversine = require('haversine-distance');
 const { updateComplaintStatusOnChain, resolveComplaintOnChain } = require('../utils/blockchain');
+const { formatComplaintResponse } = require('./complaintController');
 
 const MAX_DISTANCE_METERS = 100; // 100 meters tolerance
 
 exports.verifyComplaint = async (req, res) => {
   try {
-    const complaint = await Complaint.findById(req.params.id);
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    complaint.status = 'Verified';
-    complaint.verifiedBy = req.user.id;
-    complaint.verifiedAt = new Date();
-    complaint.statusHistory.push({
+    const { error: updateError } = await supabase
+      .from('complaints')
+      .update({
+        status: 'Verified',
+        verified_by: req.user.id,
+        verified_at: new Date().toISOString()
+      })
+      .eq('id', req.params.id);
+
+    if (updateError) {
+      return res.status(500).json({ success: false, message: 'Error verifying complaint', error: updateError.message });
+    }
+
+    // Add to status history
+    await supabase.from('status_history').insert({
+      complaint_id: req.params.id,
       status: 'Verified',
-      timestamp: new Date(),
-      updatedBy: req.user.id
+      timestamp: new Date().toISOString(),
+      updated_by: req.user.id
     });
 
-    await complaint.save();
-
-    // Update status on blockchain for immutable audit trail
+    // Update status on blockchain
     try {
-      if (complaint.onChain) {
-        await updateComplaintStatusOnChain(complaint._id.toString(), 'Verified');
-        console.log(`✅ Complaint ${complaint._id} status updated on blockchain: Verified`);
+      if (complaint.on_chain) {
+        await updateComplaintStatusOnChain(complaint.id, 'Verified');
+        console.log(`✅ Complaint ${complaint.id} status updated on blockchain: Verified`);
       }
     } catch (blockchainError) {
       console.error('⚠️ Blockchain status update failed:', blockchainError.message);
     }
 
+    // Fetch updated complaint
+    const { data: updated } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
     res.status(200).json({
       success: true,
       message: 'Complaint verified successfully',
-      complaint
+      complaint: formatComplaintResponse(updated, null)
     });
   } catch (error) {
     res.status(500).json({
@@ -64,38 +86,51 @@ exports.updateComplaintStatus = async (req, res) => {
       });
     }
 
-    const complaint = await Complaint.findById(req.params.id);
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    complaint.status = status;
-    complaint.statusHistory.push({
+    await supabase
+      .from('complaints')
+      .update({ status })
+      .eq('id', req.params.id);
+
+    await supabase.from('status_history').insert({
+      complaint_id: req.params.id,
       status,
-      timestamp: new Date(),
-      updatedBy: req.user.id
+      timestamp: new Date().toISOString(),
+      updated_by: req.user.id
     });
 
-    await complaint.save();
-
-    // Update status on blockchain for immutable audit trail
+    // Update on blockchain
     try {
-      if (complaint.onChain) {
-        await updateComplaintStatusOnChain(complaint._id.toString(), status);
-        console.log(`✅ Complaint ${complaint._id} status updated on blockchain: ${status}`);
+      if (complaint.on_chain) {
+        await updateComplaintStatusOnChain(complaint.id, status);
+        console.log(`✅ Complaint ${complaint.id} status updated on blockchain: ${status}`);
       }
     } catch (blockchainError) {
       console.error('⚠️ Blockchain status update failed:', blockchainError.message);
     }
 
+    const { data: updated } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
     res.status(200).json({
       success: true,
       message: 'Status updated successfully',
-      complaint
+      complaint: formatComplaintResponse(updated, null)
     });
   } catch (error) {
     res.status(500).json({
@@ -108,20 +143,23 @@ exports.updateComplaintStatus = async (req, res) => {
 
 exports.resolveComplaint = async (req, res) => {
   try {
-    const complaint = await Complaint.findById(req.params.id);
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    const resolutionImagePaths = req.files 
-      ? req.files.map(file => `/uploads/complaints/${file.filename}`) 
+    const resolutionImagePaths = req.files
+      ? req.files.map(file => `/uploads/complaints/${file.filename}`)
       : [];
 
-    // Require at least one resolution image to complete the complaint
     if (resolutionImagePaths.length === 0) {
       return res.status(400).json({
         success: false,
@@ -143,8 +181,8 @@ exports.resolveComplaint = async (req, res) => {
         };
 
         const complaintLocation = {
-          latitude: complaint.location.coordinates[1],
-          longitude: complaint.location.coordinates[0]
+          latitude: complaint.location_lat,
+          longitude: complaint.location_lng
         };
 
         const distance = haversine(imageLocation, complaintLocation);
@@ -156,53 +194,64 @@ exports.resolveComplaint = async (req, res) => {
           });
         }
       } else {
-        // Allow if exif data is not present, can be changed based on strictness
-        console.log(`Warning: No EXIF GPS data found for resolution image of complaint ${complaint._id}. Skipping location verification.`);
+        console.log(`Warning: No EXIF GPS data found for resolution image of complaint ${complaint.id}. Skipping location verification.`);
       }
     } catch (exifError) {
       console.error('Error reading EXIF data:', exifError);
-      // Do not block if EXIF reading fails, but log it.
     }
 
+    const resolvedAt = new Date().toISOString();
+
+    await supabase
+      .from('complaints')
+      .update({
+        status: 'Resolved',
+        resolved_at: resolvedAt,
+        resolution_images: resolutionImagePaths
+      })
+      .eq('id', req.params.id);
+
+    await supabase.from('status_history').insert({
+      complaint_id: req.params.id,
+      status: 'Resolved',
+      timestamp: resolvedAt,
+      updated_by: req.user.id
+    });
 
     const resolutionData = {
-      complaintId: complaint._id.toString(),
+      complaintId: complaint.id,
       resolutionImages: resolutionImagePaths,
-      resolvedAt: new Date(),
+      resolvedAt,
       resolvedBy: req.user.id
     };
 
-    complaint.status = 'Resolved';
-    complaint.resolvedAt = new Date();
-    complaint.resolutionImages = resolutionImagePaths;
-    complaint.statusHistory.push({
-      status: 'Resolved',
-      timestamp: new Date(),
-      updatedBy: req.user.id
-    });
-
-    await complaint.save();
-
-    // Register resolution on blockchain with proof
+    // Register resolution on blockchain
     try {
-      if (complaint.onChain) {
-        const blockchainResult = await resolveComplaintOnChain(
-          complaint._id.toString(),
-          resolutionData
-        );
-        complaint.resolutionHash = blockchainResult.resolutionHash;
-        complaint.resolutionTransactionId = blockchainResult.transactionId;
-        await complaint.save();
-        console.log(`✅ Complaint ${complaint._id} resolved on blockchain: ${blockchainResult.transactionId}`);
+      if (complaint.on_chain) {
+        const blockchainResult = await resolveComplaintOnChain(complaint.id, resolutionData);
+        await supabase
+          .from('complaints')
+          .update({
+            resolution_hash: blockchainResult.resolutionHash,
+            resolution_transaction_id: blockchainResult.transactionId
+          })
+          .eq('id', req.params.id);
+        console.log(`✅ Complaint ${complaint.id} resolved on blockchain: ${blockchainResult.transactionId}`);
       }
     } catch (blockchainError) {
       console.error('⚠️ Blockchain resolution failed:', blockchainError.message);
     }
 
+    const { data: updated } = await supabase
+      .from('complaints')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
     res.status(200).json({
       success: true,
       message: 'Complaint resolved successfully',
-      complaint
+      complaint: formatComplaintResponse(updated, null)
     });
   } catch (error) {
     res.status(500).json({
@@ -215,16 +264,20 @@ exports.resolveComplaint = async (req, res) => {
 
 exports.deleteComplaint = async (req, res) => {
   try {
-    const complaint = await Complaint.findById(req.params.id);
+    const { data: complaint, error } = await supabase
+      .from('complaints')
+      .select('id')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!complaint) {
+    if (error || !complaint) {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
       });
     }
 
-    await complaint.deleteOne();
+    await supabase.from('complaints').delete().eq('id', req.params.id);
 
     res.status(200).json({
       success: true,

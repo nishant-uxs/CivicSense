@@ -1,46 +1,59 @@
 const express = require('express');
 const router = express.Router();
-const Complaint = require('../models/Complaint');
-const User = require('../models/User');
+const supabase = require('../utils/supabase');
 
 // GET /api/leaderboard — top reporters with stats and badges
 router.get('/', async (req, res) => {
   try {
-    // Top reporters by complaint count
-    const topReporters = await Complaint.aggregate([
-      { $group: {
-        _id: '$reporter',
-        totalComplaints: { $sum: 1 },
-        totalVotes: { $sum: '$votes' },
-        resolvedCount: { $sum: { $cond: [{ $eq: ['$status', 'Resolved'] }, 1, 0] } },
-        categories: { $addToSet: '$category' }
-      }},
-      { $sort: { totalComplaints: -1 } },
-      { $limit: 20 },
-      { $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'user'
-      }},
-      { $unwind: '$user' },
-      { $project: {
-        _id: 1,
-        name: '$user.name',
-        totalComplaints: 1,
-        totalVotes: 1,
-        resolvedCount: 1,
-        categoriesCount: { $size: '$categories' },
-        score: { $add: [
-          { $multiply: ['$totalComplaints', 10] },
-          { $multiply: ['$totalVotes', 2] },
-          { $multiply: ['$resolvedCount', 5] }
-        ]}
-      }}
-    ]);
+    // Fetch all complaints with reporter info
+    const { data: complaints, error } = await supabase
+      .from('complaints')
+      .select('reporter_id, votes, status, category');
 
-    // Assign badges
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+
+    // Aggregate by reporter
+    const reporterStats = {};
+    (complaints || []).forEach(c => {
+      if (!reporterStats[c.reporter_id]) {
+        reporterStats[c.reporter_id] = {
+          _id: c.reporter_id,
+          totalComplaints: 0,
+          totalVotes: 0,
+          resolvedCount: 0,
+          categories: new Set()
+        };
+      }
+      const s = reporterStats[c.reporter_id];
+      s.totalComplaints++;
+      s.totalVotes += c.votes || 0;
+      if (c.status === 'Resolved') s.resolvedCount++;
+      s.categories.add(c.category);
+    });
+
+    // Sort by totalComplaints desc, take top 20
+    const topReporters = Object.values(reporterStats)
+      .sort((a, b) => b.totalComplaints - a.totalComplaints)
+      .slice(0, 20);
+
+    // Fetch user names
+    const reporterIds = topReporters.map(r => r._id);
+    let userMap = {};
+    if (reporterIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', reporterIds);
+      (users || []).forEach(u => { userMap[u.id] = u.name; });
+    }
+
+    // Build leaderboard with badges
     const leaderboard = topReporters.map((u, idx) => {
+      const categoriesCount = u.categories.size;
+      const score = (u.totalComplaints * 10) + (u.totalVotes * 2) + (u.resolvedCount * 5);
+
       const badges = [];
       if (u.totalComplaints >= 50) badges.push({ name: 'Civic Champion', icon: '🏆', color: 'bg-yellow-100 text-yellow-800' });
       else if (u.totalComplaints >= 20) badges.push({ name: 'Active Reporter', icon: '⭐', color: 'bg-blue-100 text-blue-800' });
@@ -48,21 +61,31 @@ router.get('/', async (req, res) => {
 
       if (u.totalVotes >= 100) badges.push({ name: 'Community Voice', icon: '📢', color: 'bg-purple-100 text-purple-800' });
       if (u.resolvedCount >= 10) badges.push({ name: 'Problem Solver', icon: '✅', color: 'bg-emerald-100 text-emerald-800' });
-      if (u.categoriesCount >= 5) badges.push({ name: 'Diverse Reporter', icon: '🎯', color: 'bg-orange-100 text-orange-800' });
+      if (categoriesCount >= 5) badges.push({ name: 'Diverse Reporter', icon: '🎯', color: 'bg-orange-100 text-orange-800' });
       if (idx === 0) badges.push({ name: '#1 Reporter', icon: '👑', color: 'bg-amber-100 text-amber-800' });
 
-      return { ...u, badges, rank: idx + 1 };
+      return {
+        _id: u._id,
+        name: userMap[u._id] || 'Unknown',
+        totalComplaints: u.totalComplaints,
+        totalVotes: u.totalVotes,
+        resolvedCount: u.resolvedCount,
+        categoriesCount,
+        score,
+        badges,
+        rank: idx + 1
+      };
     });
 
     // Overall stats
-    const totalComplaints = await Complaint.countDocuments();
-    const totalUsers = await User.countDocuments();
-    const totalResolved = await Complaint.countDocuments({ status: 'Resolved' });
+    const totalComplaints = (complaints || []).length;
+    const { count: totalUsers } = await supabase.from('users').select('id', { count: 'exact', head: true });
+    const totalResolved = (complaints || []).filter(c => c.status === 'Resolved').length;
 
     res.json({
       success: true,
       leaderboard,
-      stats: { totalComplaints, totalUsers, totalResolved }
+      stats: { totalComplaints, totalUsers: totalUsers || 0, totalResolved }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

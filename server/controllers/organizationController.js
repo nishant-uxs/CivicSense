@@ -1,8 +1,8 @@
-const Organization = require('../models/Organization');
+const supabase = require('../utils/supabase');
 
 exports.createOrganization = async (req, res) => {
   try {
-    const { name, type, categories, contacts, isActive } = req.body;
+    const { name, type, categories, contacts, coverage, isActive } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -11,17 +11,26 @@ exports.createOrganization = async (req, res) => {
       });
     }
 
-    const org = await Organization.create({
-      name,
-      type,
-      categories: Array.isArray(categories) ? categories : [],
-      contacts: contacts || { emails: [] },
-      isActive: typeof isActive === 'boolean' ? isActive : true
-    });
+    const { data: org, error } = await supabase
+      .from('organizations')
+      .insert({
+        name,
+        type: type || 'department',
+        categories: Array.isArray(categories) ? categories : [],
+        contacts: contacts || { emails: [] },
+        coverage: coverage || { cities: [], pincodes: [] },
+        is_active: typeof isActive === 'boolean' ? isActive : true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ success: false, message: 'Error creating organization', error: error.message });
+    }
 
     res.status(201).json({
       success: true,
-      organization: org
+      organization: formatOrgResponse(org)
     });
   } catch (error) {
     res.status(500).json({
@@ -35,15 +44,20 @@ exports.createOrganization = async (req, res) => {
 exports.listOrganizations = async (req, res) => {
   try {
     const { active } = req.query;
-    const query = {};
-    if (active === 'true') query.isActive = true;
-    if (active === 'false') query.isActive = false;
+    let query = supabase.from('organizations').select('*');
+    if (active === 'true') query = query.eq('is_active', true);
+    if (active === 'false') query = query.eq('is_active', false);
+    query = query.order('created_at', { ascending: false });
 
-    const orgs = await Organization.find(query).sort({ createdAt: -1 });
+    const { data: orgs, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ success: false, message: 'Error fetching organizations', error: error.message });
+    }
 
     res.status(200).json({
       success: true,
-      organizations: orgs
+      organizations: (orgs || []).map(formatOrgResponse)
     });
   } catch (error) {
     res.status(500).json({
@@ -56,18 +70,22 @@ exports.listOrganizations = async (req, res) => {
 
 exports.updateOrganization = async (req, res) => {
   try {
-    const updates = { ...req.body };
+    const updates = {};
+    if (req.body.name !== undefined) updates.name = req.body.name;
+    if (req.body.type !== undefined) updates.type = req.body.type;
+    if (req.body.categories !== undefined) updates.categories = Array.isArray(req.body.categories) ? req.body.categories : [];
+    if (req.body.contacts !== undefined) updates.contacts = req.body.contacts;
+    if (req.body.coverage !== undefined) updates.coverage = req.body.coverage;
+    if (req.body.isActive !== undefined) updates.is_active = req.body.isActive;
 
-    if (updates.categories && !Array.isArray(updates.categories)) {
-      updates.categories = [];
-    }
+    const { data: org, error } = await supabase
+      .from('organizations')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
 
-    const org = await Organization.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true
-    });
-
-    if (!org) {
+    if (error || !org) {
       return res.status(404).json({
         success: false,
         message: 'Organization not found'
@@ -76,7 +94,7 @@ exports.updateOrganization = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      organization: org
+      organization: formatOrgResponse(org)
     });
   } catch (error) {
     res.status(500).json({
@@ -89,16 +107,20 @@ exports.updateOrganization = async (req, res) => {
 
 exports.deleteOrganization = async (req, res) => {
   try {
-    const org = await Organization.findById(req.params.id);
+    const { data: org, error: fetchError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!org) {
+    if (fetchError || !org) {
       return res.status(404).json({
         success: false,
         message: 'Organization not found'
       });
     }
 
-    await org.deleteOne();
+    await supabase.from('organizations').delete().eq('id', req.params.id);
 
     res.status(200).json({
       success: true,
@@ -112,3 +134,19 @@ exports.deleteOrganization = async (req, res) => {
     });
   }
 };
+
+function formatOrgResponse(org) {
+  return {
+    _id: org.id,
+    id: org.id,
+    name: org.name,
+    type: org.type,
+    categories: org.categories || [],
+    contacts: org.contacts || { emails: [], phones: [], whatsappNumbers: [] },
+    coverage: org.coverage || { cities: [], pincodes: [] },
+    isActive: org.is_active,
+    createdAt: org.created_at
+  };
+}
+
+exports.formatOrgResponse = formatOrgResponse;

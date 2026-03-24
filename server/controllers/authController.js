@@ -1,4 +1,5 @@
-const User = require('../models/User');
+const supabase = require('../utils/supabase');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const generateToken = (id) => {
@@ -18,8 +19,14 @@ exports.register = async (req, res) => {
       });
     }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
+    // Check if user exists
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (existing) {
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email'
@@ -30,21 +37,35 @@ exports.register = async (req, res) => {
       process.env.ADMIN_EMAIL &&
       String(process.env.ADMIN_EMAIL).toLowerCase().trim() === String(email).toLowerCase().trim();
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-      phone,
-      ...(isAdminEmail ? { role: 'admin' } : {})
-    });
+    const password_hash = await bcrypt.hash(password, 12);
 
-    const token = generateToken(user._id);
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({
+        name,
+        email: email.toLowerCase().trim(),
+        password_hash,
+        phone: phone || null,
+        role: isAdminEmail ? 'admin' : 'user'
+      })
+      .select('id, name, email, role')
+      .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error creating user',
+        error: error.message
+      });
+    }
+
+    const token = generateToken(user.id);
 
     res.status(201).json({
       success: true,
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role
@@ -70,15 +91,20 @@ exports.login = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, password_hash')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (error || !user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    const isPasswordCorrect = await user.comparePassword(password);
+    const isPasswordCorrect = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordCorrect) {
       return res.status(401).json({
         success: false,
@@ -86,13 +112,13 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.status(200).json({
       success: true,
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role
@@ -109,7 +135,19 @@ exports.login = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, phone, organization_id, created_at')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error || !user) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error fetching user'
+      });
+    }
+
     res.status(200).json({
       success: true,
       user

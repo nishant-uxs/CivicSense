@@ -1,5 +1,5 @@
-const User = require('../models/User');
-const Organization = require('../models/Organization');
+const supabase = require('../utils/supabase');
+const bcrypt = require('bcryptjs');
 
 exports.createOrgUser = async (req, res) => {
   try {
@@ -12,39 +12,61 @@ exports.createOrgUser = async (req, res) => {
       });
     }
 
-    const org = await Organization.findById(organizationId);
-    if (!org) {
+    // Check org exists
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('id', organizationId)
+      .single();
+
+    if (orgError || !org) {
       return res.status(404).json({
         success: false,
         message: 'Organization not found'
       });
     }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
+    // Check email unique
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (existing) {
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email'
       });
     }
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-      phone,
-      role: 'org_user',
-      organization: org._id
-    });
+    const password_hash = await bcrypt.hash(password, 12);
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({
+        name,
+        email: email.toLowerCase().trim(),
+        password_hash,
+        phone: phone || null,
+        role: 'org_user',
+        organization_id: org.id
+      })
+      .select('id, name, email, role, organization_id')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ success: false, message: 'Error creating org user', error: error.message });
+    }
 
     res.status(201).json({
       success: true,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        organization: org._id
+        organization: user.organization_id
       }
     });
   } catch (error) {
