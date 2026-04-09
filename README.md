@@ -27,7 +27,7 @@ User Reports Issue ──→ Admin Resolves ──→ User Confirms Resolution
      (TX #1)              (TX #2)              (TX #3)
 ```
 
-Each step is recorded as a transaction on the **Ethereum Sepolia testnet**, creating a tamper-proof audit trail. Citizens can report potholes, garbage overflow, broken streetlights, and more — with photo evidence, GPS location, and AI-powered categorization.
+Each step is recorded as a transaction on the **Ethereum Sepolia testnet**, creating a tamper-proof audit trail. Citizens can report potholes, garbage overflow, broken streetlights, and more — with photo evidence, GPS location, and AI-powered categorizations.
 
 ---
 
