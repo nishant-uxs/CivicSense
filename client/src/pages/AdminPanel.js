@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { complaintsAPI, adminAPI, analyticsAPI } from '../utils/api';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CheckCircle, AlertTriangle, TrendingUp, Users, Loader2 } from 'lucide-react';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { CheckCircle, AlertTriangle, TrendingUp, Users } from 'lucide-react';
 import ComplaintCard from '../components/ComplaintCard';
 import BlockchainTxModal from '../components/BlockchainTxModal';
 

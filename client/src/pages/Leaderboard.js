@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { leaderboardAPI } from '../utils/api';
-import { Trophy, Medal, Star, Users, FileText, CheckCircle, Loader2 } from 'lucide-react';
+import { Trophy, Star, Users, FileText, CheckCircle, Loader2 } from 'lucide-react';
 
 const RANK_STYLES = [
   'bg-gradient-to-r from-yellow-400 to-amber-500 text-white',

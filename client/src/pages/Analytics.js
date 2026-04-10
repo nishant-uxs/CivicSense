@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { analyticsAPI } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Clock, CheckCircle, AlertCircle, Users, BarChart3,
-  Timer, MapPin, Loader2, Search, X, Globe
+  Timer, MapPin, Loader2, Search, X
 } from 'lucide-react';
 
 const COLORS = ['#eab308', '#3b82f6', '#a855f7', '#22c55e', '#ef4444', '#f97316', '#06b6d4', '#ec4899'];
@@ -34,6 +34,7 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaQuery]);
 
   const fetchAnalytics = async () => {

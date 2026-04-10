@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn } from 'lucide-react';
+// lucide-react icons removed (unused)
 
 const Login = () => {
   const [formData, setFormData] = useState({

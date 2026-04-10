@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { complaintsAPI } from '../utils/api';
-import { TrendingUp, Clock, CheckCircle, AlertCircle, Search, X } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, AlertCircle, Search } from 'lucide-react';
 import ComplaintCard from '../components/ComplaintCard';
 
 const Dashboard = () => {
@@ -14,6 +14,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchComplaints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, sortBy, searchQuery]);
 
   const fetchComplaints = async () => {

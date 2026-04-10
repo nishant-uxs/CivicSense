@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, ThumbsUp, Calendar } from 'lucide-react';
-import { STATUS_COLORS, STATUS_LABELS, getCategoryLabel, getCategoryIcon } from '../utils/constants';
+import { STATUS_COLORS, STATUS_LABELS, getCategoryIcon } from '../utils/constants';
 import { format } from 'date-fns';
 
 const ComplaintCard = ({ complaint }) => {

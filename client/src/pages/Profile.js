@@ -4,7 +4,7 @@ import { userAPI } from '../utils/api';
 import { User, Mail, Phone, FileText, ThumbsUp } from 'lucide-react';
 
 const Profile = () => {
-  const { user } = useAuth();
+  useAuth(); // ensure authenticated
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
