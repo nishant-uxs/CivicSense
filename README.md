@@ -3,12 +3,13 @@
 
   # CivicSense
 
-  **Blockchain-Verified Civic Issue Reporting Platform**
+  **Blockchain-verified civic issue reporting**
 
   Report civic issues. Track resolutions. Verify on-chain.
 
   [![Live Demo](https://img.shields.io/badge/Live-civic--sense--six.vercel.app-6366f1?style=for-the-badge&logo=vercel&logoColor=white)](https://civic-sense-six.vercel.app)
   [![Ethereum](https://img.shields.io/badge/Network-Sepolia-3C3C3D?style=for-the-badge&logo=ethereum)](https://sepolia.etherscan.io)
+  [![Gemini](https://img.shields.io/badge/AI-Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-1e293b?style=for-the-badge)](./LICENSE)
 
 </div>
@@ -23,7 +24,7 @@
 | **Network** | Ethereum Sepolia testnet |
 | **Stack** | React 18 · Express · Supabase · Gemini AI · Solidity |
 
-**10 API route groups** · **12 frontend pages** · **1 Solidity contract** · 3-step on-chain lifecycle
+**10 API route groups** · **12 frontend pages** · **1 Solidity contract** · **3 on-chain transactions** per complaint lifecycle
 
 ---
 
