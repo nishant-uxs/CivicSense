@@ -7,14 +7,23 @@
 
   Report civic issues. Track resolutions. Verify on-chain.
 
-  ![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?logo=solidity)
-  ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-  ![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express)
-  ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase)
-  ![Ethereum](https://img.shields.io/badge/Network-Sepolia-6C5CE7?logo=ethereum)
-  ![License](https://img.shields.io/badge/License-MIT-green)
+  [![Live Demo](https://img.shields.io/badge/Live-civic--sense--six.vercel.app-6366f1?style=for-the-badge&logo=vercel&logoColor=white)](https://civic-sense-six.vercel.app)
+  [![Ethereum](https://img.shields.io/badge/Network-Sepolia-3C3C3D?style=for-the-badge&logo=ethereum)](https://sepolia.etherscan.io)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-1e293b?style=for-the-badge)](./LICENSE)
 
 </div>
+
+---
+
+## Overview
+
+| | |
+|---|---|
+| **Live demo** | https://civic-sense-six.vercel.app |
+| **Network** | Ethereum Sepolia testnet |
+| **Stack** | React 18 · Express · Supabase · Gemini AI · Solidity |
+
+**10 API route groups** · **12 frontend pages** · **1 Solidity contract** · 3-step on-chain lifecycle
 
 ---
 
@@ -28,6 +37,31 @@ User Reports Issue ──→ Admin Resolves ──→ User Confirms Resolution
 ```
 
 Each step is recorded as a transaction on the **Ethereum Sepolia testnet**, creating a tamper-proof audit trail. Citizens can report potholes, garbage overflow, broken streetlights, and more — with photo evidence, GPS location, and AI-powered categorizations.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client
+        UI[React SPA · 12 pages]
+    end
+    subgraph Server
+        API[Express · 10 route groups]
+        SB[(Supabase)]
+        GEM[Gemini AI]
+        BC[Blockchain Service]
+    end
+    subgraph Chain
+        CS[CivicSense.sol]
+    end
+    UI --> API
+    API --> SB
+    API --> GEM
+    API --> BC --> CS
+    CS --> Sepolia[(Sepolia)]
+```
+
+**Hybrid storage** — photos, profiles, and comments in Supabase; SHA-256 hashes and lifecycle timestamps anchored on-chain.
 
 ---
 
